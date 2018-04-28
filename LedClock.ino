@@ -1,133 +1,26 @@
 /**
-   MQTTCLient.ino
+   LedClock.ino
 
-   Reads light and weather sensors and publishes readings via mqtt
+   Displays Clock using LEDs
 
-    Created on: 25.3.2017
+    Created on: 12.3.2018
 
 */
-
-// Go to longer intervals
-#define VOLTAGE_LOW 2040
-// Minimum volate for operation
-#define VOLTAGE_MIN 1900
 
 //Pin defintions
 #define I2CSDA 4  //D2 gruen
 #define I2CSCL 5  //D1 gelb
 #define PIRINPUT 12 //D6
-// Regenzaehler 13
 #define NEOPIXEL 14 //D5
-#define UNUSED1 2 // D4
-#define DUSTTX // D8
-#define DUSTRX // D7
 
-// #define ESP1 // Test Arbeitszimmer
-// #define ESP2 // Kueche
-// #define ESP3 // Wohnzimmer
-// #define ESP4 // Garten
-// #define ESP6 // Test mit Lithium-Akku
-// #define ESP7  // Hausanschlussraum
-// #define ESP8 // Fernsehzimmer
-// #define ESP9 // Heizraum
-// #define ESP10 // Büro Wolfgang / Schifferstadt / Flur 1.OG
-// #define ESP11 // Lolin32 Lite
-// #define ESP12 // Schlafzimmer
-#define ESP13 // Lichterkette / Uhr
 
-#if defined(ESP1)
-// #define OUTDOOR 1
-#define INDOOR 1
-#define NROFLEDS 1
-// #define VOLTAGE_PS 
-// #define BME280ADDR 0x76
-#define BME680ADDR 0x77
-#define GY49 0x4a
-// #define SI7021 0x40
-#define SDS011RX D4
-#define SDS011TX D3
-#define DEBUG 1
-// #define LS_FACTOR_M 0x02
-// #define LSSENSOR 1
-// #define UVSENSOR 1
-// #define RAINCOUNTER 13
-// Voltage when on power supply
-#define VOLTAGE_PS 3000
-
-#elif defined(ESP2)
-#define INDOOR 1
-#define MOTION
-#define NROFLEDS 10
-#define BME280ADDR 0x77
-#define LS_FACTOR_M 0x01
-// Voltage when on power supply
-#define VOLTAGE_PS 2700
-
-#elif defined(ESP3)
-#define INDOOR 1
-#define BME280ADDR 0x76
-#define LSSENSOR
-#define LS_FACTOR_M 0x02
-#define DEBUG 1
-#define NROFLEDS 1
-// Voltage when on power supply
-#define VOLTAGE_PS 2700
-
-#elif defined(ESP4)
-#define DEBUG 1
-#define OUTDOOR 1
-#define NROFLEDS 1
-#define TSL2561
-#define BME280ADDR 0x76
-#define LS_FACTOR_M 0x02
-#define ADC 1
-#define REGEN_ADC 0 // ADC-Pin 0 for rain detection
-// #define SOIL_ADC 3 // ADC-Pin 3 for soil moisture
-// Voltage when on power supply
-#define VOLTAGE_PS 2600
-
-#elif defined(ESP6)
-#define INDOOR 1
-#define VOLTAGE_PS 3300
-#define VOLTAGE_LOW 3300
-#define DEBUG 1
-#define ADXL345 6
-
-#elif defined(ESP7) 
-// Indoor with GY49 light sensor
-#define INDOOR 1
-#define VOLTAGE_PS 3000
-#define NROFLEDS 1
-#define BME280ADDR 0x76
-#define DEBUG 1
-#define GY49 0x4a
-
-#elif defined(ESP8) || defined(ESP9) || defined(ESP10) || defined(ESP12)
-// Indoor
-#define INDOOR 1
-#define VOLTAGE_PS 3000
-#define NROFLEDS 1
-#define BME280ADDR 0x76
-#define DEBUG 1
-#define TSL2561
-
-#elif defined(ESP11)
-#define INDOOR 1
-#define VOLTAGE_PS 3000
-#define NROFLEDS 1
-#define BME280ADDR 0x76
-#define DEBUG 1
-#define TSL2561
-
-#elif defined(ESP13)
-#define INDOOR 1
 #define NROFLEDS 60
 #define DEBUG 1
 #define DS3231 0x68
-#define ALEXA
-#define CLOCK // behafe like a clock
-
-#endif
+#define BME280ADDR 0x76
+// #define SI7021
+#define MPR121 0x5a
+#define TSL2561
 
 // 0x29 TSL45315 (Light)
 // 0x38 VEML6070 (Light)
@@ -137,9 +30,11 @@
 // 0x4a GY49 or MAX44009 Light Sensor
 // 0x50 PCF8583P
 // 0x57 ATMEL732
+// 0x5a MPR121 12-Touchpanel
 // 0x68 DS3231 Clock
 // 0x76 BME280
-// 0x77 BME680
+// 0x77 BME680 (also BMP180)
+
 
 
 #include <Arduino.h>
@@ -163,11 +58,50 @@
 #include <SparkFunBME280.h>
 // #include <ESP8266HTTPClient.h>
 
-// UV-Sensor - just testing at the moment
-#ifdef UVSENSOR
-#include "Adafruit_VEML6070.h"
-Adafruit_VEML6070 uv = Adafruit_VEML6070();
+#if defined(MPR121)
+#include "Adafruit_MPR121.h"
+Adafruit_MPR121 cap = Adafruit_MPR121();
+uint16_t lasttouched = 0;
+uint16_t currtouched = 0;
+
+// define 12 touch buttons
+#define BUTTON_TEMPERATURE 0x0001 // show temperature
+#define BUTTON_HUMIDITY    0x0002 // show humidity
+#define BUTTON_HOURPLUS    0x0004 // increase hour by one
+#define BUTTON_HOURMINUS   0x0008
+#define BUTTON_MINUTEPLUS  0x0010
+#define BUTTON_MINUTEMINUS 0x0020
+#define BUTTON_ENTER       0x0040
+#define BUTTON_CANCEL      0x0080
+
+// Left side from top to bottom
+// show temperature
+// show humidity
+
+// set time
+// set countdown
+// set waketime
+
+// hour+
+// hour-
+// minute+
+// minute-
+
+// right side from top to bottom
+// enter
+// cancel
+// countdown minunte+ (hold for fast increase)
+// countdown minute-
+
+
 #endif
+
+// define operational modes
+#define MODE_OFF 0
+#define MODE_CLOCK 1
+#define MODE_TIMER 2
+#define MODE_SETTIMER 3
+static int runMode = MODE_CLOCK;
 
 // DS3231 real time clock
 #if defined(DS3231)
@@ -175,15 +109,23 @@ Adafruit_VEML6070 uv = Adafruit_VEML6070();
 RTC_DS3231 rtc;
 static byte rtc_initialized = 0;
 
-// Task Scheduler only for Indoor use
-#if defined(INDOOR)
+// Task Scheduler 
 #include <TaskScheduler.h>
 Scheduler runner;
-void ledsshift();
 void showTime();
-Task ledshift_task(2000,TASK_FOREVER,&ledsshift);
+void showSensor();
+void publishSensor();
+void showTimer();
 Task clock_task(500,TASK_FOREVER,&showTime);
-#endif
+Task showSensor_task(1000*3*60,TASK_FOREVER,&showSensor);
+Task publishSensor_task(1000*30,TASK_FOREVER,&publishSensor);
+Task timer_task(500,20,&showTimer);
+
+DateTime timerTarget;
+TimeSpan setupTimer;
+
+// Brightness
+static double Brightness = 10;
 
 
 // print current time
@@ -208,18 +150,7 @@ void rtcSetup() {
 }
 #endif
 
-#if defined(ALEXA)
-#include "fauxmoESP.h"
-fauxmoESP fauxmo;
-#endif
 
-
-// BME680 Sensor
-#if defined(BME680ADDR)
-#include <Adafruit_Sensor.h>
-#include "Adafruit_BME680.h"
-Adafruit_BME680 bme680;
-#endif
 
 // Temp + Humidity Sensor Si7021
 #if defined(SI7021)
@@ -227,11 +158,6 @@ Adafruit_BME680 bme680;
 Adafruit_Si7021 si7021 = Adafruit_Si7021();
 #endif
 
-// Dust Sensor SDS011
-#if defined(SDS011RX) && defined(SDS011TX)
-#include <SDS011.h>
-SDS011 sds011;
-#endif
 
 // Light sensor TSL2561
 #ifdef TSL2561
@@ -241,81 +167,9 @@ unsigned int msTSL2561;
 boolean gainTSL2561;
 #endif
 
-#if defined(ADXL345)
-#include <Adafruit_Sensor.h>
-#include <Adafruit_ADXL345_U.h>
-Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(ADXL345);
-float adxl345Zero = 0;
-unsigned int adxlCalibCount = 100;
 
-#define ADXLCALIB 100
-
-float calibrateADXL345 (void) {
-  float sum;
-  int i;
-
-#ifdef DEBUG
-  Serial.print("Calibrating ADXL345. Old value: ");
-  Serial.println((unsigned int)(adxl345Zero * 100.0));
-#endif
-
-  for (i=0; i < ADXLCALIB; i++) {
-    sensors_event_t event; 
-    accel.getEvent(&event);
-    sum += abs(event.acceleration.x)+abs(event.acceleration.y)+abs(event.acceleration.z);
-    delay(50);
-  }
-  adxl345Zero = sum / ADXLCALIB;
-  adxlCalibCount = 100;
-
-#ifdef DEBUG
-  Serial.print("Complete. New value:");
-  Serial.println((unsigned int)(adxl345Zero * 100.0));
-  delay(2000);
-#endif
-  
-  return adxl345Zero;
-}
-
-void setup_ADXL345(void) {
-  if (!accel.begin()) {
-#ifdef DEBUG
-    Serial.println("Error detecting ADXL345");
-#endif
-  }
-  
-  accel.setRange(ADXL345_RANGE_2_G);
-
-  // get average acceleration
-  calibrateADXL345();
-}
-#else
-void setup_ADXL345(void) {}
-#endif
-
-#ifdef ADC
-#include <Adafruit_ADS1015.h>
-Adafruit_ADS1115 ads;
-#endif
-
-
-#ifdef NROFLEDS
 #include <Adafruit_NeoPixel.h>
 Adafruit_NeoPixel led = Adafruit_NeoPixel(NROFLEDS, NEOPIXEL, NEO_GRB + NEO_KHZ800);
-#endif
-uint32_t snowColor=0;
-uint32_t snowInterval=0;
-
-// Run modes
-#define RM_START 1
-#define RM_SENSOR 2
-#define RM_CONFIG 4
-#define RM_SNOW 8
-uint32_t runMode = RM_START | RM_SENSOR | RM_CONFIG;
-
-#if defined(ARDUINO_ARCH_ESP8266)
-ADC_MODE(ADC_VCC);
-#endif
 
 const char* fn_ssid = "/ssid";
 const char *fn_pass = "/pass";
@@ -344,8 +198,6 @@ int value = 0;
 
 int pirInput = PIRINPUT;
 int pirState = LOW;
-
-unsigned int voltage;
 
 
 // read data from file and return it
@@ -390,14 +242,6 @@ uint32_t makeColor(int r, int g, int b) {
 #endif
 }
 
-uint32_t getColor(int i, uint8_t *r, uint8_t *g, uint8_t *b) {
-  uint32_t color = led.getPixelColor(i);
-  *r = (uint8_t)(color >> 16);
-  *g = (uint8_t)(color >>  8);
-  *b = (uint8_t)color;
-  return color;
-}
-
 // dims all colors equally by factor dimBy
 uint32_t dimColor(uint32_t color, int dimBy) {
   uint8_t 
@@ -416,8 +260,41 @@ uint32_t dimColor(uint32_t color, int dimBy) {
   return makeColor(r,g,b);
 }
 
+// dim color to Brightness variable
+uint32_t dimColor(uint32_t color) {
+  // mapping of Brighness
+  uint8_t 
+      r = (uint8_t)(color >> 16),
+      g = (uint8_t)(color >>  8),
+      b = (uint8_t)color;
+
+  uint8_t smallest = min(r,b);
+  if (smallest == 0)
+    smallest = max(r,b);
+
+  uint8_t sm2 = min(smallest,g);
+  if (sm2 == 0)
+    sm2 = max(smallest,g);
+
+  if (sm2 == 0)
+    return 0;
+  
+  uint8_t mr = r / sm2;
+  uint8_t mg = g / sm2;
+  uint8_t mb = b / sm2;
+  
+  if (Brightness < 1) {
+    return makeColor(mr,mg,mb);
+  } else if (Brightness <= 20) {
+    return makeColor(mr*Brightness,mg*Brightness,mb*Brightness);
+  } else {
+    return color;
+  }
+}
+
 // round-robin map
 uint32_t rrmap(int in) {
+  in +=30;
 #ifdef NROFLEDS
   if (in < 0) {
     return NROFLEDS+in;
@@ -434,7 +311,11 @@ uint32_t addColor(int i, uint32_t color) {
     return 0;
 
   uint8_t r,g,b;
-  getColor(i,&r,&g,&b);
+  uint32_t oldcolor = led.getPixelColor(i);
+  r = (uint8_t)(oldcolor >> 16);
+  g = (uint8_t)(oldcolor >>  8);
+  b = (uint8_t)oldcolor;
+  
   uint8_t 
       rx = (uint8_t)(color >> 16),
       gx = (uint8_t)(color >>  8),
@@ -466,8 +347,10 @@ void centerLight(int center, unsigned int width, uint32_t color, bool additive) 
   
   addColor(rrmap(center),color);
   for (int i=1; i<=width; i++) {
-    led.setPixelColor(rrmap(center+i),dimColor(color,width+1-i));
-    led.setPixelColor(rrmap(center-i),dimColor(color,width+1-i));
+    // led.setPixelColor(rrmap(center+i),dimColor(color,width+1-i));
+    // led.setPixelColor(rrmap(center-i),dimColor(color,width+1-i));
+    addColor(rrmap(center+i),dimColor(color,width+1-i));
+    addColor(rrmap(center-i),dimColor(color,width+1-i));
   }
 #endif
 }
@@ -482,27 +365,29 @@ void showTime(DateTime when) {
     hour12 = when.hour();
   }
 
-  for (int i=NROFLEDS-1; i>=0; i--) {
+  for (int i=0; i < NROFLEDS; i++)
     led.setPixelColor(i,0,0,0);
-    if (clock_task.isFirstIteration()) {
-      led.show();
-      delay(10);
-    }
-  }
 
-  int hourStart = map(hour12,0,12,0,NROFLEDS-1);
+  int hourStart = map(hour12,0,12,0,NROFLEDS);
   int hourWidth = map(2,0,12,0,NROFLEDS-1) - map(1,0,12,0,NROFLEDS-1);
   float hourFraction= when.minute()/60.0;
   int hourEnd = hourStart + int((float)hourWidth * hourFraction);
 
-  centerLight(hourEnd,3,led.Color(200,0,0));
-  centerLight(map(when.minute(),0,59,0,NROFLEDS-1),2,led.Color(200,200,0));
-  led.setPixelColor(map(when.second(),0,59,0,NROFLEDS-1),200,200,200);
+  // Hour light width 5 (2*2+1)
+  centerLight(hourEnd,2,dimColor(led.Color(120,0,0)),false);
+  // Minute light width 3 (2*1+1)
+  centerLight(map(when.minute(),0,59,0,NROFLEDS-1),1,dimColor(led.Color(120,120,0)),true);
+  // second light, dim to Brightnes
+  led.setPixelColor(rrmap(map(when.second(),0,59,0,NROFLEDS-1)),dimColor(makeColor(120,120,120))); 
   led.show();
 }
 
 void showTime() {
 #if defined(DS3231)
+  if (timer_task.isEnabled()) {
+    timer_task.disable();
+    timer_task.enableDelayed(3*1000);
+  }
   showTime(rtc.now());
 #endif
 }
@@ -517,21 +402,17 @@ void showTemperature(int minTemp, int maxTemp, int thisTemp) {
   for (int i=0; i < NROFLEDS; i++)
     led.setPixelColor(i,0,0,0);
 
-  if (clock_task.isEnabled()) {
-    clock_task.disable();
-    clock_task.enableDelayed(5000);
-  }
   led.show();
 
   int lastLed = 0;
   for (int i=minTemp; i<=0 && i <= thisTemp;i++) {
     if (i == thisTemp) {
-      led.setPixelColor(map(i,minTemp,maxTemp,0,NROFLEDS-1),0,0,254);
+      led.setPixelColor(rrmap(map(i,minTemp,maxTemp,0,NROFLEDS-1)),dimColor(makeColor(0,0,254)));
     } else {
       int thisLed = map(i,minTemp,maxTemp,0,NROFLEDS-1);
-      led.setPixelColor(thisLed,0,0,1);
+      led.setPixelColor(rrmap(thisLed),0,0,1);
       if (thisLed-1 > lastLed)
-        led.setPixelColor(thisLed-1,0,0,1);
+        led.setPixelColor(rrmap(thisLed-1),0,0,1);
       lastLed = thisLed;
     }
     led.show();
@@ -539,12 +420,12 @@ void showTemperature(int minTemp, int maxTemp, int thisTemp) {
   }
   for (int i=1;i<=maxTemp && i <= thisTemp;i++) {
     if (i == thisTemp) {
-      led.setPixelColor(map(i,minTemp,maxTemp,0,NROFLEDS-1),254,0,0);
+      led.setPixelColor(rrmap(map(i,minTemp,maxTemp,0,NROFLEDS-1)),dimColor(makeColor(254,0,0)));
     } else {
       int thisLed = map(i,minTemp,maxTemp,0,NROFLEDS-1);
-      led.setPixelColor(thisLed,1,0,0);
+      led.setPixelColor(rrmap(thisLed),1,0,0);
       if (thisLed-1 > lastLed)
-        led.setPixelColor(thisLed-1,1,0,0);
+        led.setPixelColor(rrmap(thisLed-1),1,0,0);
       lastLed = thisLed;
     }
     led.show();
@@ -554,24 +435,39 @@ void showTemperature(int minTemp, int maxTemp, int thisTemp) {
 #endif  
 }
 
+void showTemperature() {
+  clock_task.disable();
+  timer_task.disable();
+  showTemperature(-10,40,getLocalTemperature());
+  delay(5000);
+  for (int i=NROFLEDS-1; i >=0; i--) {
+    int wait = led.getPixelColor(rrmap(i));
+    led.setPixelColor(rrmap(i),0,0,0);
+    led.show();
+    if (wait) {
+      delay(10);
+    }
+  }
+  showTime();
+  clock_task.enable();
+  timer_task.enable();
+}
+
+
 // show the humidity on a scale of 0 to 100
 void showHumidity(int thisHum) {
 #ifdef NROFLEDS
   for (int i=0; i < NROFLEDS; i++)
     led.setPixelColor(i,0,0,0);
 
-  if (clock_task.isEnabled()) {
-    clock_task.disable();
-    clock_task.restart();
-    clock_task.enableDelayed(5000);
-  }
+  
   led.show();
   
   for (int i=0; i <= thisHum; i++) {
     if (i == thisHum) {
-      led.setPixelColor(map(i,0,100,0,NROFLEDS-1),0,100,100);
+      led.setPixelColor(rrmap(map(i,0,100,0,NROFLEDS-1)),dimColor(makeColor(0,100,100)));
     } else if (i < thisHum) {
-      led.setPixelColor(map(i,0,100,0,NROFLEDS-1),0,2,2);
+      led.setPixelColor(rrmap(map(i,0,100,0,NROFLEDS-1)),0,1,1);
     }
     led.show();
     delay(7);
@@ -579,11 +475,57 @@ void showHumidity(int thisHum) {
 #endif
 }
 
+void showHumidity() {
+  clock_task.disable();
+  timer_task.disable();
+  showHumidity(getLocalHumidity());
+  delay(5000);
+  for (int i=NROFLEDS-1; i >=0; i--) {
+    int wait = led.getPixelColor(rrmap(i));
+    led.setPixelColor(rrmap(i),0,0,0);
+    led.show();
+    if (wait) {
+      delay(10);
+    }
+  }
+  showTime();
+  clock_task.enable();
+  timer_task.enable();
+}
+
+void showSensor() {
+  clock_task.disable();
+  showTemperature(-10,40,getLocalTemperature());
+  delay(5000);
+  showHumidity(getLocalHumidity());
+  delay(5000);
+  for (int i=NROFLEDS-1; i >=0; i--) {
+    int wait = led.getPixelColor(rrmap(i));
+    led.setPixelColor(rrmap(i),0,0,0);
+    led.show();
+    if (wait) {
+      delay(10);
+    }
+  }
+  showTime();
+  clock_task.enable();
+}
+
+
 // set all LEDs to the same color
 void monochrome(byte r, byte g, byte b) {
 #ifdef NROFLEDS
   for (int i=0; i < NROFLEDS; i++) {
     led.setPixelColor(i,r,g,b);
+  }
+  led.show();
+#endif
+}
+
+void monochrome (uint32_t c) {
+  #ifdef NROFLEDS
+  for (int i=0; i < NROFLEDS; i++) {
+    led.setPixelColor(i,c);
   }
   led.show();
 #endif
@@ -599,27 +541,6 @@ void monochrome(byte r, byte g, byte b, byte variant) {
 #endif
 }
 
-#if defined(NROFLEDS) && defined(INDOOR)
-void ledsshift() {
-  uint32_t zeroled;
-  zeroled = led.getPixelColor(0);
-  for (int i=1; i < NROFLEDS; i++) {
-    led.setPixelColor(i-1,led.getPixelColor(i));
-  }
-  led.setPixelColor(NROFLEDS-1,zeroled);
-  led.show();
-}
-
-void snow(uint32_t color, int interval) {
-    int which = random(0,NROFLEDS);
-    int oldcolor = led.getPixelColor(which);
-    led.setPixelColor(which, color);
-    led.show();
-    delay(interval);
-    led.setPixelColor(which,oldcolor);
-    led.show();
-}
-#endif
 
 // led funtion. in case of not indoor it does nothing
 void setled(byte r, byte g, byte b) {
@@ -649,7 +570,6 @@ void setled(byte show) {
 #ifdef NROFLEDS
   if (!show) {
     int i;
-    ledshift_task.disable();
     for (i = 0; i < NROFLEDS; i++) {
       setled(i, 0, 0, 0, 0);
     }
@@ -658,6 +578,103 @@ void setled(byte show) {
 #endif
 }
 
+void flashLeds(int howoften, uint32_t c) {
+  for (int i = 0; i < howoften; i++ ) {
+    monochrome(c);
+    delay(50);
+    led.clear();
+    led.show();
+    delay(50);
+  }
+}
+
+void dumpT(TimeSpan t) {
+#ifdef DEBUG
+  Serial.print("TimeSpan hours=");
+  Serial.print(t.hours());
+  Serial.print(" minutes=");
+  Serial.print(t.minutes());
+  Serial.print(" seconds=");
+  Serial.println(t.seconds());
+#endif
+}
+
+void dumpD(uint32_t x) {
+#ifdef DEBUG
+  DateTime t = DateTime(x);
+  Serial.print("DateTime hour=");
+  Serial.print(t.hour());
+  Serial.print(" minute=");
+  Serial.print(t.minute());
+  Serial.print(" second=");
+  Serial.println(t.second());
+#endif
+}
+
+// Functions for count down timer
+void setTimer(int minutes, int seconds) {
+  // sets the timer to number of minutes and seconds
+#ifdef DEBUG
+  Serial.print("setTimer(");
+  Serial.print(minutes);
+  Serial.println(")");
+#endif
+
+  TimeSpan when = TimeSpan(0,0,minutes,0);
+  dumpT(when);
+  timerTarget = DateTime(rtc.now() + when); 
+  dumpD(rtc.now().unixtime());
+  dumpD(timerTarget.unixtime());
+}
+
+void setTimer(int minutes) {
+  setTimer(minutes,0);
+}
+
+void setTimer(TimeSpan t) {
+  timerTarget = DateTime(rtc.now() + t);
+}
+
+void adjustTimer(int minutes) {
+  TimeSpan adjustment = TimeSpan(0,0,minutes,0);
+  dumpD(timerTarget.unixtime());
+  timerTarget = DateTime(timerTarget + adjustment);
+  dumpD(timerTarget.unixtime());
+}
+
+
+void showTimer(TimeSpan timeLeft) {
+
+    led.clear();
+    
+    for (int i = 0; i <= timeLeft.minutes(); i++) {
+      led.setPixelColor(rrmap(i),dimColor(makeColor(0,100,0)));
+    }
+    if (timeLeft.hours() >= 1) {
+      for (int i = 0; i < timeLeft.hours(); i++) {
+        led.setPixelColor(rrmap(i),dimColor(makeColor(100,20,0)));
+      }
+    }
+    if (runMode != MODE_SETTIMER) 
+      led.setPixelColor(rrmap(timeLeft.seconds()),dimColor(makeColor(100,100,100)));
+    led.show();
+  
+}
+
+void showTimer(void) {
+  TimeSpan timeLeft = timerTarget - rtc.now();
+
+  // dumpT(timeLeft);
+
+  if (runMode == MODE_TIMER && timeLeft.totalseconds() <= 0) {
+    // time is up
+    flashLeds(10,makeColor(0,100,0));
+    setMode(MODE_CLOCK);
+  } 
+  else 
+    showTimer(timeLeft);
+
+}
 
 void printConfig() {
 #ifdef DEBUG
@@ -774,30 +791,9 @@ void setup() {
 
 #endif
 
-  // Rain counter starts very early
-#ifdef RAINCOUNTER
-  pinMode(RAINCOUNTER, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(RAINCOUNTER), countRaindrops, FALLING);
-#endif
 
-#if defined(ARDUINO_ARCH_ESP8266) && defined(OUTDOOR)
-  voltage = ESP.getVcc();
-
-  // before doing anything check if we have enough power
-  if (voltage <= VOLTAGE_MIN) {
-#ifdef DEBUG
-    Serial.print("Voltage below minimum: ");
-    Serial.println(voltage);
-#endif
-    ESP.deepSleep(1000000 * 60 * 10); // Hibernate 10 minutes.
-    delay(100);
-  }
-#endif
-
-#ifdef NROFLEDS
   led.begin();
   led.show();
-#endif
 
   setled(255, 0, 0);
   // setup filesystem
@@ -846,21 +842,12 @@ void setup() {
       WiFi.waitForConnectResult();
     }
 #endif
-    if (retries > 100) {
-      // no connection after lot of retries
-      runMode |= RM_CONFIG;
-      // break;
-    }
   }
 
   setled(0, 255, 0);
   delay(100);
 
 
-  if (WiFi.status() == WL_CONNECTED) {
-    runMode &= ~RM_START;
-    runMode |= RM_SENSOR;
-  }
 #ifdef DEBUG
   Serial.println("");
   Serial.println("Wifi connected");
@@ -875,17 +862,7 @@ void setup() {
   // setup i2c
   Wire.begin(I2CSDA, I2CSCL);
 
-  // setup light chip
-#ifdef LSSENSOR
-  ls_setup();
-#endif
-  delay(10);
-  // setup sensor chip
-  bme_setup();
-
-#ifdef UVSENSOR
-  uv.begin(VEML6070_1_T);
-#endif
+bme_setup();
 
 //Setup real time clock
 #if defined(DS3231)
@@ -898,6 +875,8 @@ void setup() {
 #endif
 
 #ifdef TSL2561
+  int isOK = 0;
+  while (!isOK) { 
   lightTSL2561.begin();
 #ifdef DEBUG
   unsigned char ID;
@@ -905,18 +884,16 @@ void setup() {
     Serial.print("Got TSL2561 ID: 0x");
     Serial.print(ID, HEX);
     Serial.println(", should be 0x5x");
+    isOK = 1;
   } else {
     byte error = lightTSL2561.getError();
     Serial.print("Got TSL2561 Error: ");
     Serial.println(error);
   }
+  }
 #endif
   lightTSL2561.setTiming(gainTSL2561, 2, msTSL2561);
   lightTSL2561.setPowerUp();
-#endif
-
-#ifdef ADXL345
-  setup_ADXL345();
 #endif
 
 // GY49 Light Sensor
@@ -927,36 +904,6 @@ void setup() {
   Wire.endTransmission();
 #endif
 
-// BME680 sensor
-#if defined(BME680ADDR)
-if (!bme680.begin()) {
-#ifdef DEBUG
-  Serial.println("BME60 not found");
-#endif
-} else { 
-  bme680.setTemperatureOversampling(BME680_OS_8X);
-  bme680.setHumidityOversampling(BME680_OS_2X);
-  bme680.setPressureOversampling(BME680_OS_4X);
-  bme680.setIIRFilterSize(BME680_FILTER_SIZE_3);
-  bme680.setGasHeater(320, 150);
-}
-#endif
-
-// SDS011 Dust Sensor
-#if defined(SDS011RX) && defined(SDS011TX)
-  Serial.println("Starting SDS011 on Port " + String(SDS011RX) + " and " + String(SDS011TX));
-  sds011.begin(SDS011RX,SDS011TX);
-#endif
-
-  // setup PIR
-#ifdef MOTION
-  pinMode(pirInput, INPUT);
-  pirState = digitalRead(pirInput);
-#endif
-
-#ifdef ADC
-  ads.begin();
-#endif
 
 
   // setup the mqtt client
@@ -964,37 +911,72 @@ if (!bme680.begin()) {
   client.setServer(Smqttserver.c_str(), atoi(Smqttport.c_str()));
   client.setCallback(callback);
 
-#if defined(ALEXA)
-  fauxmo.enable(true);
-  fauxmo.addDevice("Lichterkette");
-
-  fauxmo.onSetState([](unsigned char device_id, const char * device_name, bool state) {
-        Serial.printf("[MAIN] Device #%d (%s) state: %s\n", device_id, device_name, state ? "ON" : "OFF");
-        if (state) {
-          monochrome(0,10,40,30);
-        } else {
-          setled(0);
-        }
-  });
-
-  fauxmo.onGetState([](unsigned char device_id, const char * device_name) {
-        return 1;
-  });
-
+#if defined(MPR121)
+  cap.begin(MPR121);
 #endif
 
-#if defined(INDOOR)
   // Task Scheduler
   runner.init();
-  runner.addTask(ledshift_task);
-
-#endif
-
-  setled(0, 0, 0);
-#ifdef CLOCK // start the clock display
+  runner.addTask(showSensor_task);
   runner.addTask(clock_task);
-  clock_task.enable();
-#endif
+  runner.addTask(publishSensor_task);
+  runner.addTask(timer_task);
+  
+  setled(0, 0, 0);
+  publishSensor_task.enableDelayed();
+
+  setMode(MODE_CLOCK);
+
+  }
+
+/* Verbal description of run modes:
+ *  
+ *  Clock:
+ *    - clock update is called evera 0.5 seconds
+ *    - every 3 minutes temperature and humidity is shown
+ *    
+ *  Timer:
+ *    - timer is updated every 0.5 seconds
+ *    - every 10 seconds time is shown for 3 seconds
+ *    - every 3 minutes temperature and humidity is shown
+ *    
+ *  Timer Set:
+ *    - clock is not shown
+ *    - timer is set to 1 second and shown constantly
+ *    - hour +/- and minute +/- adjust timer
+ *    - enter starts the timer
+ *    - cancel sets mode to ClockMode
+ *    - after no action for one minute mode also changes to ClockMode
+ *  
+ */
+
+void setMode (int mode) {
+  if (mode == MODE_CLOCK) {
+    //show clock, every 
+    clock_task.setInterval(500);
+    clock_task.setIterations(TASK_FOREVER);
+    showSensor_task.setInterval(1000*3*60);
+    timer_task.disable();
+    showSensor_task.enableDelayed();
+    clock_task.enable();
+  } else if (mode == MODE_OFF) {
+    clock_task.disable();
+    showSensor_task.disable();
+    timer_task.disable();
+  } else if (mode == MODE_TIMER) {
+    clock_task.disable();
+    timer_task.setIterations(20);
+    timer_task.setInterval(500);
+    timer_task.enable();
+    showSensor_task.enableDelayed();
+  } else if (mode == MODE_SETTIMER) {
+    clock_task.disable();
+    timer_task.disable();
+    showSensor_task.disable();
+    setupTimer = TimeSpan(1);
+    showTimer(setupTimer);
+  }
+  runMode = mode;
 }
 
 void callback(char* topic, byte* payload, unsigned int length)  {
@@ -1015,8 +997,6 @@ void callback(char* topic, byte* payload, unsigned int length)  {
 
   if (in.equals(String("reboot"))) {
     ESP.restart();
-  } else if (in.equals(String("sleep"))) {
-    sleepFor(60);
   } else if (in.startsWith("led ")) {
     int position = 0;
     while (in.substring(position, position + 1) != " " && position < in.length()) {
@@ -1103,11 +1083,7 @@ void callback(char* topic, byte* payload, unsigned int length)  {
     int v = in.substring(position).toInt();
     monochrome(r, g, b, v);
 
-  } else if (in.startsWith("ledsshift")) {
-    // ledsshift();
-    ledshift_task.enable();
-
-  } else if (in.startsWith("snow ")) {  
+  } else if (in.startsWith("flash ")) {
     int position = 0;
     while (in.substring(position, position + 1) != " " && position < in.length()) {
       position++;
@@ -1127,19 +1103,8 @@ void callback(char* topic, byte* payload, unsigned int length)  {
     while (in.substring(position, position + 1) != " " && position < in.length()) {
       position++;
     }
-    int n = in.substring(position).toInt();
-
-    if (n == 0) {
-      runMode &= ~RM_SNOW;
-    } else {
-      runMode |= RM_SNOW;
-    }
-
-    snowColor = led.Color(r,g,b);
-    snowInterval = n;
-
-    snow(snowColor,n);
-
+    int count = in.substring(position).toInt();
+    flashLeds(count,makeColor(r,g,b));
     // Location - note that change becomes active after reboot only
   } else if (in.startsWith("location ")) {
     int position = 0;
@@ -1202,7 +1167,6 @@ void callback(char* topic, byte* payload, unsigned int length)  {
   }
 
   // Unix time if RTC is defined
-#if defined(DS3231)
   else if (in.startsWith("unixtime ")) {
     int position = 0;
     while (in.substring(position, position + 1) != " " && position < in.length()) {
@@ -1243,6 +1207,43 @@ void callback(char* topic, byte* payload, unsigned int length)  {
 
   }
 
+  else if (in.startsWith("set timer ")) {
+    int position = 9;
+    while (in.substring(position, position + 1) != " " && position < in.length()) {
+      position++;
+    }
+    uint32_t interval = in.substring(position).toInt();
+    setTimer(interval);
+    setMode(MODE_TIMER);
+  }
+
+  else if (in.startsWith("adjust timer ")) {
+    int position = 11;
+    while (in.substring(position, position + 1) != " " && position < in.length()) {
+      position++;
+    }
+    uint32_t interval = in.substring(position).toInt();
+    adjustTimer(interval);
+  }
+
+  else if (in.startsWith("mode ")) {
+    int position = 0;
+    while (in.substring(position, position + 1) != " " && position < in.length()) {
+      position++;
+    }
+    uint32_t newmode = in.substring(position).toInt();
+    setMode(newmode);
+  }
+
+  else if (in.startsWith("key ")) {
+    int position = 0;
+    while (in.substring(position, position + 1) != " " && position < in.length()) {
+      position++;
+    }
+    uint32_t thiskey = in.substring(position).toInt();
+    processKey(thiskey);
+  }
+
   
   else if (in.startsWith("now")) {
     printCurrentTime();
@@ -1251,8 +1252,52 @@ void callback(char* topic, byte* payload, unsigned int length)  {
   else if (in.startsWith("clock")) {
     showTime();
   }
-#endif
+  else if (in.startsWith("startclock")) {
+    clock_task.enable();
+  }
+  else if (in.startsWith("stopclock")) {
+    clock_task.disable();
+  }
+  else if (in.startsWith("second0")) {
+    DateTime thisnow = rtc.now();
+    rtc.adjust(thisnow - TimeSpan(thisnow.second()));
+    printCurrentTime();
+  }
+  else if (in.startsWith("minute-")) {
+    rtc.adjust(DateTime(rtc.now()-TimeSpan(60)));
+    printCurrentTime();
+  }
+  else if (in.startsWith("minute+")) {
+    rtc.adjust(DateTime(rtc.now()+TimeSpan(60)));
+    printCurrentTime();
+  }
+  else if (in.startsWith("hour-")) {
+    rtc.adjust(DateTime(rtc.now()-TimeSpan(60*60)));
+    printCurrentTime();
+  }
+  else if (in.startsWith("hour+")) {
+    rtc.adjust(DateTime(rtc.now()+TimeSpan(60*60)));
+    printCurrentTime();
+  }
+  else if (in.startsWith("hour")) {
+    int position = 3;
+    
+    while (position < in.length() && in.substring(position, position + 1) != " ") {
+      position++;
+    }
+    int hour = in.substring(position).toInt();
 
+    position++;
+    while (position < in.length() && in.substring(position, position + 1) != " ") {
+      position++;
+    }
+    int minute = in.substring(position).toInt();
+
+    DateTime t(2018,3,15,hour,minute,0);
+    
+    showTime(t);
+  }
+    
   else {
 #ifdef DEBUG
     Serial.println("unknown command received: " + in);
@@ -1260,22 +1305,6 @@ void callback(char* topic, byte* payload, unsigned int length)  {
   }
 }
 
-void sleepFor(unsigned seconds) {
-#ifdef OUTDOOR
-  setled(0, 0, 0);
-#ifdef LSSENSOR
-  ls_shutdown(); // shutdown light sensor
-#endif
-
-
-  client.disconnect(); //disconnect from MQTT
-  delay(100);
-  WiFi.disconnect(); // disconnect from Wifi
-  delay(200);
-  ESP.deepSleep(1000000 * seconds);
-  delay(100);
-#endif
-}
 
 boolean reconnect() {
   // Loop until we're reconnected
@@ -1413,41 +1442,6 @@ void bme_setup() {
 #endif
 }
 
-/******************** Regenzaehler */
-#ifdef RAINCOUNTER
-volatile unsigned long int raincounter = 0;
-void countRaindrops() {
-  ++raincounter;
-}
-#endif
-
-#ifdef REGEN_ADC
-/************** Regensensor */
-int16_t regen() {
-  int16_t rain;
-  rain = ads.readADC_SingleEnded(REGEN_ADC);
-#ifdef DEBUG
-  Serial.print("Regen: ");
-  Serial.println(rain);
-#endif
-  return rain;
-}
-#endif
-
-/**** Bodenfeuchte-Sensor */
-#ifdef SOIL_ADC
-int16_t soil() {
-  int16_t soil;
-  soil = ads.readADC_SingleEnded(SOIL_ADC);
-#ifdef DEBUG
-  Serial.print("Soil: ");
-  Serial.println(soil);
-#endif
-  return soil;
-}
-#endif
-
-
 
 unsigned long lastReconnectAttempt = 0;
 void myPublish(char *topic, char *msg) {
@@ -1474,12 +1468,6 @@ void myPublish(char *topic, char *msg) {
 float getLocalTemperature() {
 #if defined(BME280ADDR)
   return wetterSensor.readTempC();
-#elif defined(BME680ADDR)
-  if (bme680.performReading()) {
-      return bme680.temperature;
-  } else {
-    return 0.0;
-  }
 #elif defined(SI7021)
   return si7021.readTemperature();
 #else
@@ -1488,89 +1476,17 @@ float getLocalTemperature() {
 }
 
 float getLocalHumidity() {
-#if defined(BME280ADDR)
-  return wetterSensor.readFloatHumidity();
-#elif defined(BME680ADDR)
-  if (bme680.performReading()) {
-      return bme680.humidity;
-  } else {
-    return 0.0;
-  }
-#elif defined(SI7021)
+#if defined(SI7021)
   return si7021.readHumidity();
+#elif defined(BME280ADDR)
+  return wetterSensor.readFloatHumidity();
 #else
   return 0;
 #endif
   
 }
 
-unsigned long int loopDelay = 2000;
-unsigned long now;
-int lastMotion = 0, thisMotion = 0;
-
-void loop() {
-#if defined(INDOOR)
-  runner.execute();
-#endif
-
-  if (!client.connected()) {
-    now = millis();
-    if (now - lastReconnectAttempt > 5000) {
-      lastReconnectAttempt = now;
-      if (reconnect()) {
-        lastReconnectAttempt = 0;
-      }
-    }
-  }
-  client.loop();
-  fauxmo.handle();
-
-#ifdef MOTION
-  thisMotion = digitalRead(pirInput);
-#else
-  thisMotion = lastMotion;
-#endif
-
-#ifdef ADXL345
-  sensors_event_t event; 
-  accel.getEvent(&event);
-  float bump = abs(event.acceleration.x)+abs(event.acceleration.y)+abs(event.acceleration.z);
-  float diff = adxl345Zero - bump;
-  if (diff > 0.5 || diff < -0.1) {
-    snprintf(topic, 50, "/%s/%s/seismo", Ssite.c_str(), Slocation.c_str());
-    snprintf(msg, 50, "%d", (int) (diff *100.0));
-    myPublish(topic, msg);
-    adxlCalibCount--;
-    if (adxlCalibCount == 0) {
-      calibrateADXL345();
-    }
-  }
-
-
-#endif
-
-  now = millis();
-  if ((now - lastMsg > loopDelay) || (lastMotion != thisMotion)) {
-    lastMsg = now;
-    ++value;
-
-#if defined(OUTDOOR) && defined(ARDUINO_ARCH_ESP8266)
-    voltage = ESP.getVcc();
-    snprintf(topic, 50, "/%s/%s/voltage", Ssite.c_str(), Smyname.c_str());
-    snprintf(msg, 50, "%s", String(voltage / 1000.0, 3).c_str());
-    if (value > 2) {
-      myPublish(topic, msg);
-    }
-#endif
-
-#ifdef LSSENSOR
-    snprintf(topic, 50, "/%s/%s/light", Ssite.c_str(), Slocation.c_str());
-    snprintf(msg, 50, "%u", ls_read());
-    if (value > 2) {
-      myPublish(topic, msg);
-    }
-#endif
-
+double getBrightness() {
 #ifdef TSL2561
     unsigned int tsldata0, tsldata1;
     if (lightTSL2561.getData(tsldata0, tsldata1)) {
@@ -1578,75 +1494,15 @@ void loop() {
       boolean good;
       good = lightTSL2561.getLux(gainTSL2561, msTSL2561, tsldata0, tsldata1, lux);
       if (good) {
-        snprintf(topic, 50, "/%s/%s/light", Ssite.c_str(), Slocation.c_str());
-        snprintf(msg, 50, "%u", (unsigned int) lux);
-        if (value > 2) {
-          myPublish(topic, msg);
-        }
-      }
+        return lux;
+      } 
     }
 #endif
+  return -1;
+}
 
-#ifdef GY49
-    unsigned int gydata[2];
-    Wire.beginTransmission(GY49);
-    Wire.write(0x03);
-    Wire.endTransmission();
-    Wire.requestFrom(GY49,2);
-    if (Wire.available() == 2) {
-      gydata[0] = Wire.read();
-      gydata[1] = Wire.read();
-      int exponent =  (gydata[0] & 0xf0) >> 4;
-      int mantissa = ((gydata[0] & 0x0f) << 4) | (gydata[1] & 0x0f);
-      float luminance = (float)pow(2,exponent) * (float)mantissa * 0.045;
-    
-      snprintf(topic, 50, "/%s/%s/light", Ssite.c_str(), Slocation.c_str());
-      snprintf(msg, 50, "%s", String(luminance, 2).c_str());
-      if (value > 2) { 
-        myPublish(topic, msg);
-      }
-    } else {
-#ifdef DEBUG
-      Serial.println("Error: GY49 no data");
-#endif
-    }
-#endif
-
-#ifdef UVSENSOR
-    snprintf(topic, 50, "/%s/%s/UV/light", Ssite.c_str(), Slocation.c_str());
-    snprintf(msg, 50, "%u", uv.readUV());
-    if (value > 2) {
-      myPublish(topic, msg);
-    }
-#endif
-
-#ifdef REGEN_ADC
-    snprintf(topic, 50, "/%s/%s/rain", Ssite.c_str(), Slocation.c_str());
-    snprintf(msg, 50, "%u", regen());
-    if (value > 2) {
-      myPublish(topic, msg);
-    }
-#endif
-
-#ifdef RAINCOUNTER
-    snprintf(topic, 50, "/%s/%s/raindrops", Ssite.c_str(), Slocation.c_str());
-    snprintf(msg, 50, "%u", raincounter);
-    if (value > 2) {
-      myPublish(topic, msg);
-      raincounter = 0;
-    }
-#endif
-
-
-#ifdef SOIL_ADC
-    snprintf(topic, 50, "/%s/%s/soil", Ssite.c_str(), Slocation.c_str());
-    snprintf(msg, 50, "%u", soil());
-    if (value > 2) {
-      myPublish(topic, msg);
-    }
-#endif
-
-#if defined(BME280ADDR) || defined(BME680ADDR) || defined(SI7021)
+void publishSensor() {
+  #if defined(BME280ADDR) || defined(BME680ADDR) || defined(SI7021)
     snprintf(topic, 50, "/%s/%s/temperature", Ssite.c_str(), Slocation.c_str());
     snprintf(msg, 50, "%s", String(getLocalTemperature(), 2).c_str()); 
     if (value > 2) {
@@ -1654,7 +1510,7 @@ void loop() {
     }
 
     snprintf(topic, 50, "/%s/%s/humidity", Ssite.c_str(), Slocation.c_str());
-    snprintf(msg, 50, "%s", String(getLocalHumidity, 2).c_str());
+    snprintf(msg, 50, "%s", String(getLocalHumidity(), 2).c_str());
     if (value > 2) {
       myPublish(topic, msg);
     }
@@ -1669,77 +1525,106 @@ void loop() {
 
 #endif
 
-#if defined(BME680ADDR)
-    if (bme680.performReading()) {
-      snprintf(topic, 50, "/%s/%s/airpressure", Ssite.c_str(), Slocation.c_str());
-      snprintf(msg, 50, "%s", String(bme680.pressure / 100.0, 2).c_str());
+    Brightness = getBrightness();
+    if (Brightness >= 0) {
+      snprintf(topic, 50, "/%s/%s/light", Ssite.c_str(), Slocation.c_str());
+      snprintf(msg, 50, "%u", (unsigned int) Brightness);
       if (value > 2) {
         myPublish(topic, msg);
       }
-    
-      snprintf(topic, 50, "/%s/%s/airquality", Ssite.c_str(), Slocation.c_str());
-      snprintf(msg, 50, "%s", String(bme680.gas_resistance / 1000.0, 2).c_str());
-      if (value > 2) {
-        myPublish(topic, msg);
-      }
-    } 
+    }
+
+
+  value++;
+}
+
+void processKey(uint32_t button) {
+  if (button & BUTTON_TEMPERATURE) {
+    showTemperature();
+  }
+
+  if (button & BUTTON_HUMIDITY) {
+    showHumidity();
+  }
+
+  if (runMode == MODE_SETTIMER) {
+    if (button & BUTTON_HOURPLUS) {
+      setupTimer = setupTimer + TimeSpan(0,1,0,0);
+    }
+    if (button & BUTTON_HOURMINUS) {
+      setupTimer = setupTimer - TimeSpan(0,1,0,0);
+    }
+    if (button & BUTTON_MINUTEPLUS) {
+      setupTimer = setupTimer + TimeSpan(0,0,1,0);
+    }
+    if (button & BUTTON_MINUTEMINUS) {
+      setupTimer = setupTimer - TimeSpan(0,0,1,0);
+    }
+    if (button & BUTTON_CANCEL) {
+      setMode(MODE_CLOCK);
+    }
+    else if (button & BUTTON_ENTER) {
+      setTimer(setupTimer);
+      setMode(MODE_TIMER);
+    }
+    else 
+      showTimer(setupTimer);
+  }
+}
+
+
+void processKey(void) {
+#if defined(MPR121)
+  currtouched = cap.touched();
 #ifdef DEBUG
-    else {
-      Serial.println("Error getting reading from BME680");
-    }
-#endif
-#endif
-
-#if defined(SDS011RX) && defined(SDS011TX)
-    int sds011error;
-    float p10,p25;
-    // sds011.wakeup();
-    delay(100);
-    sds011error = sds011.read(&p25,&p10);
-    if (!sds011error) {
-      snprintf(topic, 50, "/%s/%s/P25", Ssite.c_str(), Slocation.c_str());
-      snprintf(msg, 50, "%s", String(p25, 2).c_str());
-      if (value > 2) {
-        myPublish(topic, msg);
-        // sds011.sleep();
-      }
-      snprintf(topic, 50, "/%s/%s/P10", Ssite.c_str(), Slocation.c_str());
-      snprintf(msg, 50, "%s", String(p10, 2).c_str());
-      if (value > 2) {
-        myPublish(topic, msg);
-      }
-    }
+  if (currtouched != lasttouched) {
+    Serial.print("curtouched = ");
+    Serial.println(currtouched);
+  }
 #endif
 
-#ifdef MOTION
-    lastMotion = thisMotion;
-    snprintf(topic, 50, "/%s/%s/motion", Ssite.c_str(), Slocation.c_str());
-    snprintf(msg, 50, "%d", thisMotion);
-    if (value > 2) {
-      myPublish(topic, msg);
-    }
-#endif
-
-    if (value > 2) {
-#if defined(OUTDOOR) && defined(ARDUINO_ARCH_ESP8266)
-      if (voltage >= VOLTAGE_PS) {
-        // on power supply
-        loopDelay = 30*1000;
-      } else if (voltage <= VOLTAGE_LOW) {
-        sleepFor(8 * 60);
-      } else {
-        // on battery, standard voltage
-        sleepFor(4 * 60);
-      }
-#endif
-#ifdef INDOOR
-      loopDelay = 60*1000;
-#endif
-
-    } else {
-
+  for (uint32_t thisbutton = 1; thisbutton <= (1<<12); thisbutton <<= 1) {
+    if ((currtouched & thisbutton) && !(lasttouched & thisbutton)) {
+      processKey(thisbutton);
     }
   }
+
+  lasttouched = currtouched;
+#endif
+}  
+
+
+unsigned long int loopDelay = 2000;
+unsigned long now;
+int lastMotion = 0, thisMotion = 0;
+
+void loop() {
+  runner.execute();
+
+  if (runMode == MODE_TIMER && timer_task.isEnabled() && timer_task.getIterations() < 2) {
+    clock_task.setIterations(8);
+    clock_task.enableDelayed(500);
+  }
+  if (runMode == MODE_TIMER && clock_task.isEnabled() && clock_task.getIterations() < 2) {
+    timer_task.setIterations(20);
+    timer_task.enableDelayed(500);
+  }
+
+
+  processKey();
+  Brightness = getBrightness();
+
+  if (!client.connected()) {
+    now = millis();
+    if (now - lastReconnectAttempt > 5000) {
+      lastReconnectAttempt = now;
+      if (reconnect()) {
+        lastReconnectAttempt = 0;
+      }
+    }
+  }
+  client.loop();
+
 }
 
 
