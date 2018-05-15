@@ -21,6 +21,7 @@
 // #define SI7021
 #define MPR121 0x5a
 #define TSL2561
+#define WEBSERVER 80
 
 // 0x29 TSL45315 (Light)
 // 0x38 VEML6070 (Light)
@@ -126,6 +127,19 @@ TimeSpan setupTimer;
 
 // Brightness
 static double Brightness = 10;
+
+// Webserver
+#if defined(WEBSERVER)
+#include "ESPAsyncTCP.h"
+#include "ESPAsyncWebServer.h"
+AsyncWebServer www(WEBSERVER);
+
+void setupWebserver(void) {
+  www.
+}
+
+#endif
+
 
 
 // print current time
